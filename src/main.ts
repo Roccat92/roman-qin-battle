@@ -11,7 +11,7 @@ import {
   restart,
   selectedUnit,
 } from './game/sim';
-import { render } from './game/render';
+import { render, ensureSprites } from './game/render';
 import { unitRadius, dist } from './game/combat';
 import { mountHud } from './ui/hud';
 import type { FormationKind } from './game/types';
@@ -19,6 +19,7 @@ import type { FormationKind } from './game/types';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const hudRoot = document.getElementById('hud') as HTMLElement;
 const ctx = canvas.getContext('2d')!;
+ensureSprites();
 
 let state: GameState = createInitialState();
 const bootParams = new URLSearchParams(location.search);
@@ -27,8 +28,13 @@ if (bootParams.get('auto') === '1') {
 }
 if (bootParams.get('shot') === 'battle') {
   startBattle(state);
-  // fast-forward ~25s of combat for screenshots
+  state.camera.zoom = 1.35;
   for (let i = 0; i < 500; i++) tick(state, 0.05);
+}
+if (bootParams.get('shot') === 'deploy') {
+  state.camera.zoom = 1.45;
+  state.camera.x = 220;
+  state.camera.y = 450;
 }
 
 let draggingId: string | null = null;

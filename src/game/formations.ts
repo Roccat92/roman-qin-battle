@@ -2,10 +2,10 @@ import type { FormationKind, Vec2, Unit } from './types';
 import { defOf, aliveCount } from './units';
 
 const SPACING: Record<FormationKind, number> = {
-  line: 14,
-  wedge: 13,
-  square: 12,
-  skirmish: 22,
+  line: 13,
+  wedge: 12,
+  square: 11,
+  skirmish: 20,
 };
 
 /** Local-space soldier offsets relative to unit center. Facing is +X locally. */

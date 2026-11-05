@@ -61,6 +61,9 @@ npm run build
 
 Stack: Vite + TypeScript + Canvas2D (no React/Three). Tests cover formation layout, combat aspects, and morale.
 
+### Sprites
+Procedural isometric soldier sprites (no external art): each unit type has idle / walk / attack × 4 facings. Romans use **red shields**; Qin wear **black lacquer armor**. Generated at runtime into offscreen canvas sheets (`src/game/sprites.ts`).
+
 ## License
 
 MIT - Roccat92 / NEXA Studio
