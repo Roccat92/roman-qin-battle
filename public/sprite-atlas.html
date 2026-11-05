@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"/><title>Sprite atlas</title>
+<style>
+body{margin:0;background:#2a2a2a;color:#eee;font:14px system-ui;padding:16px}
+canvas{image-rendering:pixelated;background:#d2c4a0;margin:8px;border:1px solid #555}
+h2{margin:12px 0 4px;color:#ffc629}
+</style></head>
+<body>
+<h1>Roman × Qin — procedural sprites (idle / walk / attack × 4 dirs)</h1>
+<div id="out"></div>
+<script type="module">
+import { preloadAllSprites, _resetSpriteCacheForTests } from '/src/game/sprites.ts';
+// re-export internals by drawing via public API at large scale
+import { drawSoldierSprite } from '/src/game/sprites.ts';
+
+const classes = ['velites','hastati','principes','triarii','equites','nubing','bubing','jiandun','qibing'];
+const states = ['idle','walk','attack'];
+const out = document.getElementById('out');
+preloadAllSprites();
+
+for (const cls of classes) {
+  const h = document.createElement('h2');
+  h.textContent = cls;
+  out.appendChild(h);
+  const c = document.createElement('canvas');
+  c.width = 900; c.height = 160;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d2c4a0';
+  ctx.fillRect(0,0,c.width,c.height);
+  let x = 40;
+  for (const st of states) {
+    for (let dir = 0; dir < 4; dir++) {
+      const facing = dir * Math.PI/2;
+      // fake unit anim by time trick: drawSoldierSprite picks anim from arg
+      drawSoldierSprite(ctx, cls, x, 120, facing, st, st==='walk'?0.2:st==='attack'?0.15:0, 1);
+      // upscale stamp
+      x += 70;
+    }
+    x += 20;
+  }
+  out.appendChild(c);
+}
+document.title = 'atlas-ready';
+</script>
+</body></html>

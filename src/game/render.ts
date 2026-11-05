@@ -1,8 +1,18 @@
 import type { GameState, Unit } from './types';
 import { WORLD_W, WORLD_H, DEPLOY_MARGIN } from './types';
 import { defOf, aliveCount } from './units';
-import { worldSoldierPos, formationBonus } from './formations';
+import { worldSoldierPos } from './formations';
 import { unitRadius } from './combat';
+import { drawSoldierSprite, animForUnit, preloadAllSprites } from './sprites';
+
+let spritesReady = false;
+
+export function ensureSprites(): void {
+  if (spritesReady) return;
+  if (typeof document === 'undefined') return;
+  preloadAllSprites();
+  spritesReady = true;
+}
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -22,14 +32,15 @@ function roundRect(
 }
 
 export function render(ctx: CanvasRenderingContext2D, s: GameState, w: number, h: number): void {
+  ensureSprites();
   const cam = s.camera;
   ctx.clearRect(0, 0, w, h);
 
-  // backdrop
+  // sandy-beige field like the reference indie formation game
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#6a8f4e');
-  g.addColorStop(0.45, '#8aab5c');
-  g.addColorStop(1, '#5c7a40');
+  g.addColorStop(0, '#c4b896');
+  g.addColorStop(0.5, '#d2c4a0');
+  g.addColorStop(1, '#b8a87e');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 
@@ -59,16 +70,14 @@ export function render(ctx: CanvasRenderingContext2D, s: GameState, w: number, h
     ctx.stroke();
   }
 
-  // draw enemy first then player for selection clarity
   const sorted = [...s.units].sort((a, b) => a.y - b.y);
-  for (const u of sorted) drawUnit(ctx, u, u.id === s.selectedId);
+  for (const u of sorted) drawUnit(ctx, u, u.id === s.selectedId, s.time);
 
   ctx.restore();
 }
 
 function drawField(ctx: CanvasRenderingContext2D, s: GameState): void {
-  // subtle grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.strokeStyle = 'rgba(80,60,30,0.08)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= WORLD_W; x += 80) {
     ctx.beginPath();
@@ -83,25 +92,23 @@ function drawField(ctx: CanvasRenderingContext2D, s: GameState): void {
     ctx.stroke();
   }
 
-  // battlefield bounds
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.strokeStyle = 'rgba(60,40,20,0.3)';
   ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
 
   if (s.phase === 'deploy') {
-    ctx.fillStyle = 'rgba(40,80,180,0.12)';
+    ctx.fillStyle = 'rgba(40,80,180,0.1)';
     ctx.fillRect(0, 0, DEPLOY_MARGIN, WORLD_H);
-    ctx.fillStyle = 'rgba(180,40,40,0.1)';
+    ctx.fillStyle = 'rgba(40,40,40,0.1)';
     ctx.fillRect(WORLD_W - DEPLOY_MARGIN, 0, DEPLOY_MARGIN, WORLD_H);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = 'rgba(40,30,10,0.75)';
     ctx.font = 'bold 16px system-ui';
     ctx.fillText('VÙNG TRIỂN KHAI LA MÃ', 36, 36);
     ctx.fillText('QUÂN TẦN (AI)', WORLD_W - DEPLOY_MARGIN + 36, 36);
   }
 
-  // center line
   ctx.setLineDash([12, 10]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.strokeStyle = 'rgba(60,40,20,0.2)';
   ctx.beginPath();
   ctx.moveTo(WORLD_W / 2, 20);
   ctx.lineTo(WORLD_W / 2, WORLD_H - 20);
@@ -109,70 +116,60 @@ function drawField(ctx: CanvasRenderingContext2D, s: GameState): void {
   ctx.setLineDash([]);
 }
 
-function drawUnit(ctx: CanvasRenderingContext2D, u: Unit, selected: boolean): void {
+function drawUnit(ctx: CanvasRenderingContext2D, u: Unit, selected: boolean, time: number): void {
   const def = defOf(u);
-  const alpha = u.routing ? 0.45 : 1;
-  ctx.globalAlpha = alpha;
+  const alpha = u.routing ? 0.5 : 1;
+  const anim = animForUnit(u);
 
   if (selected) {
     ctx.strokeStyle = '#ffc629';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(u.x, u.y, unitRadius(u) + 6, 0, Math.PI * 2);
+    ctx.ellipse(u.x, u.y + 4, unitRadius(u) + 8, (unitRadius(u) + 8) * 0.45, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  // facing wedge
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  // facing tick (small, not a huge wedge)
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  const tip = unitRadius(u) * 0.4 + 10;
   ctx.beginPath();
-  const tip = unitRadius(u) * 0.55 + 8;
   ctx.moveTo(u.x + Math.cos(u.facing) * tip, u.y + Math.sin(u.facing) * tip);
-  ctx.lineTo(
-    u.x + Math.cos(u.facing + 2.4) * 8,
-    u.y + Math.sin(u.facing + 2.4) * 8,
-  );
-  ctx.lineTo(
-    u.x + Math.cos(u.facing - 2.4) * 8,
-    u.y + Math.sin(u.facing - 2.4) * 8,
-  );
+  ctx.lineTo(u.x + Math.cos(u.facing + 2.5) * 6, u.y + Math.sin(u.facing + 2.5) * 6);
+  ctx.lineTo(u.x + Math.cos(u.facing - 2.5) * 6, u.y + Math.sin(u.facing - 2.5) * 6);
   ctx.closePath();
   ctx.fill();
 
-  const size = def.role === 'cavalry' ? 5.5 : 4;
-  for (const sol of u.soldiers) {
-    if (!sol.alive) continue;
-    const p = worldSoldierPos(u, sol.ox, sol.oy);
-    // shield / body
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    if (def.role === 'cavalry') {
-      ctx.ellipse(p.x, p.y, size * 1.4, size * 0.9, u.facing, 0, Math.PI * 2);
-    } else {
-      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
-    }
-    ctx.fill();
-    ctx.fillStyle = def.accent;
-    ctx.beginPath();
-    ctx.arc(p.x + Math.cos(u.facing) * 1.5, p.y + Math.sin(u.facing) * 1.5, size * 0.35, 0, Math.PI * 2);
-    ctx.fill();
+  // soldiers back-to-front for overlap
+  const sols = u.soldiers
+    .map((sol, i) => ({ sol, i }))
+    .filter((x) => x.sol.alive)
+    .map((x) => {
+      const p = worldSoldierPos(u, x.sol.ox, x.sol.oy);
+      return { ...p, i: x.i };
+    })
+    .sort((a, b) => a.y - b.y);
+
+  for (const p of sols) {
+    drawSoldierSprite(ctx, u.defId, p.x, p.y, u.facing, anim, time + p.i * 0.07, alpha);
   }
 
   // banner
-  const bx = u.x - Math.cos(u.facing) * 18;
-  const by = u.y - Math.sin(u.facing) * 18 - 18;
-  ctx.fillStyle = def.faction === 'rome' ? '#8b1e1e' : '#0d3d28';
-  ctx.fillRect(bx - 1, by, 3, 22);
-  ctx.fillStyle = def.accent;
-  roundRect(ctx, bx + 2, by, 28, 14, 2);
+  const bx = u.x - Math.cos(u.facing) * 16;
+  const by = u.y - Math.sin(u.facing) * 16 - 28;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = def.faction === 'rome' ? '#8b1e1e' : '#111111';
+  ctx.fillRect(bx - 1, by, 3, 26);
+  ctx.fillStyle = def.faction === 'rome' ? '#f5e6c8' : '#c9a227';
+  roundRect(ctx, bx + 2, by, 30, 14, 2);
   ctx.fill();
   ctx.fillStyle = '#111';
   ctx.font = 'bold 9px system-ui';
   ctx.fillText(u.banner, bx + 5, by + 10);
 
   // bars
-  const barW = 44;
+  const barW = 48;
   const hx = u.x - barW / 2;
-  const hy = u.y + unitRadius(u) + 8;
+  const hy = u.y + unitRadius(u) + 10;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(hx, hy, barW, 4);
   ctx.fillStyle = u.hp / u.maxHp > 0.35 ? '#3ddc84' : '#e74c3c';
@@ -186,21 +183,21 @@ function drawUnit(ctx: CanvasRenderingContext2D, u: Unit, selected: boolean): vo
   ctx.fillStyle = '#ffc629';
   ctx.fillRect(hx, hy + 9, barW * u.cohesion, 3);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.font = 'bold 10px system-ui';
   ctx.fillText(`${def.nameVi} · ${formLabel(u.formation)}`, hx, hy - 4);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.font = '9px system-ui';
-  ctx.fillText(`${aliveCount(u)}/${u.soldiers.length}`, hx + barW - 2, hy - 4);
+  const count = `${aliveCount(u)}/${u.soldiers.length}`;
+  ctx.fillText(count, hx + barW - ctx.measureText(count).width, hy - 4);
 
   if (u.routing) {
     ctx.fillStyle = '#ff6b6b';
     ctx.font = 'bold 11px system-ui';
-    ctx.fillText('RÚT LUI!', u.x - 22, u.y - unitRadius(u) - 8);
+    ctx.fillText('RÚT LUI!', u.x - 22, u.y - unitRadius(u) - 14);
   }
 
   ctx.globalAlpha = 1;
-  void formationBonus;
 }
 
 function formLabel(f: string): string {
