@@ -80,13 +80,15 @@ export function layoutFormation(
 }
 
 export interface FormationBonus {
-  frontage: number; // effective combat width multiplier
-  cohesionHold: number; // how well formation resists break
+  frontage: number;
+  cohesionHold: number;
   defenseMul: number;
   attackMul: number;
   speedMul: number;
   rangedMul: number;
   flankResist: number;
+  /** 0..1 fraction of incoming missile damage blocked while cohesion is held. */
+  missileBlock: number;
 }
 
 export function formationBonus(kind: FormationKind): FormationBonus {
@@ -100,6 +102,7 @@ export function formationBonus(kind: FormationKind): FormationBonus {
         speedMul: 1.0,
         rangedMul: 1.05,
         flankResist: 0.7,
+        missileBlock: 0.2,
       };
     case 'wedge':
       return {
@@ -110,6 +113,7 @@ export function formationBonus(kind: FormationKind): FormationBonus {
         speedMul: 1.1,
         rangedMul: 0.8,
         flankResist: 0.55,
+        missileBlock: 0.1,
       };
     case 'square':
       return {
@@ -120,6 +124,8 @@ export function formationBonus(kind: FormationKind): FormationBonus {
         speedMul: 0.7,
         rangedMul: 0.6,
         flankResist: 1.25,
+        // Testudo: shields overhead — bolts barely bite while ordered.
+        missileBlock: 0.88,
       };
     case 'skirmish':
       return {
@@ -130,8 +136,26 @@ export function formationBonus(kind: FormationKind): FormationBonus {
         speedMul: 1.25,
         rangedMul: 1.3,
         flankResist: 0.9,
+        missileBlock: 0.05,
       };
   }
+}
+
+/**
+ * Effective missile absorb 0..1. High while square/testudo cohesion holds;
+ * collapses toward 0 as formation breaks (cohesion < ~0.45).
+ */
+export function missileAbsorb(u: Unit): number {
+  const base = formationBonus(u.formation).missileBlock;
+  if (base <= 0) return 0;
+  // Full block near cohesion 1; sharp drop below 0.55; almost none under 0.35.
+  const c = u.cohesion;
+  let hold = 0;
+  if (c >= 0.75) hold = 1;
+  else if (c >= 0.55) hold = 0.55 + ((c - 0.55) / 0.2) * 0.45;
+  else if (c >= 0.35) hold = ((c - 0.35) / 0.2) * 0.55;
+  else hold = 0;
+  return base * hold;
 }
 
 /** Re-pack living soldiers into current formation. */
@@ -148,7 +172,6 @@ export function reformUnit(u: Unit): void {
       s.oy = o.y;
     }
   }
-  // cohesion recovers slightly when reforming
   u.cohesion = Math.min(1, u.cohesion + 0.15);
 }
 
@@ -171,5 +194,50 @@ export function worldSoldierPos(u: Unit, ox: number, oy: number): Vec2 {
   return {
     x: u.x + ox * c - oy * s,
     y: u.y + ox * s + oy * c,
+  };
+}
+
+/** Ally is "ahead" if projected along this unit's facing within a cone. */
+export function isAheadOf(self: Unit, other: Unit, maxForward = 280, maxLateral = 140): boolean {
+  if (other.id === self.id) return false;
+  const dx = other.x - self.x;
+  const dy = other.y - self.y;
+  const fx = Math.cos(self.facing);
+  const fy = Math.sin(self.facing);
+  const forward = dx * fx + dy * fy;
+  const lateral = Math.abs(-dy * fx + dx * fy);
+  return forward > 25 && forward < maxForward && lateral < maxLateral;
+}
+
+/** How many friendly units ahead are routing or wiped (front line broken). */
+export function brokenFrontCount(self: Unit, allies: Unit[]): number {
+  let n = 0;
+  for (const a of allies) {
+    if (!isAheadOf(self, a)) continue;
+    if (a.routing || a.hp <= 0) n++;
+  }
+  return n;
+}
+
+/**
+ * Triarii last-stand multipliers when the front has already broken.
+ * Returns { morale, defense, cohesion } scale factors (>= 1 when active).
+ */
+export function lastStandBonus(
+  u: Unit,
+  allies: Unit[],
+): { morale: number; defense: number; cohesion: number; active: boolean } {
+  if (u.defId !== 'triarii' || u.routing || u.hp <= 0) {
+    return { morale: 1, defense: 1, cohesion: 1, active: false };
+  }
+  const broken = brokenFrontCount(u, allies);
+  if (broken <= 0) return { morale: 1, defense: 1, cohesion: 1, active: false };
+  // Scale with how many front units collapsed (cap 3).
+  const t = Math.min(3, broken) / 3;
+  return {
+    morale: 1 + 0.85 * t,
+    defense: 1 + 0.55 * t,
+    cohesion: 1 + 0.7 * t,
+    active: true,
   };
 }

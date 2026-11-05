@@ -33,6 +33,11 @@ Inspired by Conqueror's Blade / Total War lite, playable in the browser.
 
 Holding cohesion buffs combat. Flank / rear hits and losses shatter it. Broken units deal far less damage and rout faster.
 
+### Balance notes (v0.1.1)
+- **Testudo / square** blocks most Qin crossbow bolts while cohesion holds; protection collapses when the formation breaks.
+- **Cavalry** flank/rear charges primarily **shatter cohesion** (disorder), not just chip HP.
+- **Triarii** gain a last-stand morale/defense/cohesion brace when friendly units ahead are routing or wiped.
+
 ## Controls
 
 - **Drag / click** - select (deploy + battle)

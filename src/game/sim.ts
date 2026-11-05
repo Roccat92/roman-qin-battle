@@ -154,8 +154,10 @@ export function tick(s: GameState, dt: number): void {
         b.engaged = true;
         delete (a as Unit & { _order?: unknown })._order;
         delete (b as Unit & { _order?: unknown })._order;
-        resolveMelee(a, b, capped, s.particles);
-        resolveMelee(b, a, capped, s.particles);
+        const alliesA = s.units.filter((x) => x.faction === a.faction);
+        const alliesB = s.units.filter((x) => x.faction === b.faction);
+        resolveMelee(a, b, capped, s.particles, alliesB);
+        resolveMelee(b, a, capped, s.particles, alliesA);
         const ang = Math.atan2(b.y - a.y, b.x - a.x);
         const overlap = er - dist(a, b);
         if (overlap > 0) {
