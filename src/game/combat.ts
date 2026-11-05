@@ -1,6 +1,12 @@
 import type { Unit, Projectile, Particle, Vec2 } from './types';
 import { defOf, aliveCount } from './units';
-import { formationBonus, cohesionPower, worldSoldierPos } from './formations';
+import {
+  formationBonus,
+  cohesionPower,
+  worldSoldierPos,
+  missileAbsorb,
+  lastStandBonus,
+} from './formations';
 
 export function dist(a: Vec2, b: Vec2): number {
   const dx = a.x - b.x;
@@ -12,7 +18,7 @@ export function angleTo(from: Vec2, to: Vec2): number {
   return Math.atan2(to.y - from.y, to.x - from.x);
 }
 
-/** 0 = front, 1 = side, 2 = rear-ish based on attacker relative to defender facing. */
+/** Aspect based on attacker relative to defender facing. */
 export function attackAspect(defender: Unit, attackerPos: Vec2): 'front' | 'flank' | 'rear' {
   const toAtk = angleTo(defender, attackerPos);
   let diff = toAtk - defender.facing;
@@ -37,14 +43,11 @@ export function killSoldiers(u: Unit, lossHp: number): number {
   const ratio = u.hp / u.maxHp;
   const targetAlive = Math.max(0, Math.ceil(u.soldiers.length * ratio));
   let alive = aliveCount(u);
-  let killed = 0;
   while (alive > targetAlive) {
-    // kill from rear of array for visual stability
     for (let i = u.soldiers.length - 1; i >= 0; i--) {
       if (u.soldiers[i].alive) {
         u.soldiers[i].alive = false;
         alive--;
-        killed++;
         break;
       }
     }
@@ -56,23 +59,57 @@ export function killSoldiers(u: Unit, lossHp: number): number {
   return before - u.hp;
 }
 
+/**
+ * Cohesion shatter from a hit. Cavalry flank/rear is the main formation-breaker:
+ * they disorder the line far more than they carve HP.
+ */
+export function cohesionShatter(
+  attacker: Unit,
+  defender: Unit,
+  aspect: 'front' | 'flank' | 'rear',
+  dt: number,
+  chargeBonus: boolean,
+): number {
+  const aDef = defOf(attacker);
+  const dBon = formationBonus(defender.formation);
+  const isCav = aDef.role === 'cavalry';
+  let wear =
+    0.08 + (aspect === 'flank' ? 0.12 : 0) + (aspect === 'rear' ? 0.22 : 0);
+
+  if (isCav) {
+    // Cavalry job: smash order. Flank/rear shatters; front still pressures.
+    if (aspect === 'rear') wear += 0.55;
+    else if (aspect === 'flank') wear += 0.42;
+    else wear += 0.12;
+    if (chargeBonus) wear *= 1.55;
+  } else if (chargeBonus) {
+    wear *= 1.35;
+  }
+
+  const amount = (wear * dt) / Math.max(0.35, dBon.cohesionHold);
+  return amount;
+}
+
 export function resolveMelee(
   attacker: Unit,
   defender: Unit,
   dt: number,
   particles: Particle[],
+  alliesOfDefender: Unit[] = [],
 ): number {
   const aDef = defOf(attacker);
   const dDef = defOf(defender);
   const aBon = formationBonus(attacker.formation);
   const dBon = formationBonus(defender.formation);
   const aspect = attackAspect(defender, attacker);
+  const stand = lastStandBonus(defender, alliesOfDefender);
+  const chargeBonus = !attacker.engaged;
   const aMul =
     aBon.attackMul *
     cohesionPower(attacker) *
-    (attacker.engaged ? 1 : aDef.charge) *
+    (chargeBonus ? aDef.charge : 1) *
     aspectMul(aspect, dBon.flankResist);
-  const dMul = dBon.defenseMul * cohesionPower(defender);
+  const dMul = dBon.defenseMul * cohesionPower(defender) * stand.defense;
 
   const pressure =
     (aDef.attack * aMul * (0.7 + 0.3 * (aliveCount(attacker) / Math.max(1, aDef.soldiers)))) /
@@ -81,12 +118,10 @@ export function resolveMelee(
   const dmg = pressure * dt * 9;
   const dealt = killSoldiers(defender, dmg);
 
-  // cohesion wear — flanks and charges shred formation
-  const wear =
-    dt *
-    (0.08 + (aspect === 'flank' ? 0.12 : 0) + (aspect === 'rear' ? 0.22 : 0)) *
-    (attacker.engaged ? 1 : 1.4);
-  defender.cohesion = Math.max(0.05, defender.cohesion - wear / dBon.cohesionHold);
+  let wear = cohesionShatter(attacker, defender, aspect, dt, chargeBonus);
+  // Triarii last stand resists disorder harder.
+  wear /= stand.cohesion;
+  defender.cohesion = Math.max(0.05, defender.cohesion - wear);
   attacker.cohesion = Math.max(0.05, attacker.cohesion - dt * 0.03);
 
   if (dealt > 0 && Math.random() < 0.4) {
@@ -107,7 +142,6 @@ export function tryRanged(
 
   const bon = formationBonus(shooter.formation);
   const aim = angleTo(shooter, target);
-  // face target when shooting
   shooter.facing = aim;
   const speed = def.role === 'ranged' && def.id === 'nubing' ? 420 : 340;
   const spread = (1.1 - shooter.cohesion) * 0.25;
@@ -127,6 +161,20 @@ export function tryRanged(
   return true;
 }
 
+/** Apply projectile hit: missile absorb (testudo) then residual damage. */
+export function applyMissileHit(u: Unit, rawDmg: number, from: Vec2): number {
+  const bon = formationBonus(u.formation);
+  const aspect = attackAspect(u, from);
+  const absorb = missileAbsorb(u);
+  const afterBlock = rawDmg * (1 - absorb);
+  const mul = aspectMul(aspect, bon.flankResist) / bon.defenseMul;
+  const dealt = killSoldiers(u, afterBlock * mul);
+  // Held testudo barely loses order to bolts; broken lines still flinch.
+  const cohHit = absorb > 0.5 ? 0.004 : 0.02 * (1 - absorb * 0.5);
+  u.cohesion = Math.max(0.05, u.cohesion - cohHit);
+  return dealt;
+}
+
 export function stepProjectiles(
   projectiles: Projectile[],
   units: Unit[],
@@ -142,12 +190,10 @@ export function stepProjectiles(
     for (const u of units) {
       if (u.faction === p.faction || u.routing || u.hp <= 0) continue;
       if (dist(p, u) < 28) {
-        const bon = formationBonus(u.formation);
-        const aspect = attackAspect(u, p);
-        const mul = aspectMul(aspect, bon.flankResist) / bon.defenseMul;
-        killSoldiers(u, p.dmg * mul);
-        u.cohesion = Math.max(0.05, u.cohesion - 0.02);
-        spawnBlood(particles, p.x, p.y);
+        const dealt = applyMissileHit(u, p.dmg, p);
+        if (dealt > 0.15 || missileAbsorb(u) < 0.5) {
+          spawnBlood(particles, p.x, p.y);
+        }
         hit = true;
         break;
       }
@@ -201,7 +247,6 @@ export function stepParticles(particles: Particle[], dt: number): void {
   }
 }
 
-/** Approximate unit radius for collision / engagement. */
 export function unitRadius(u: Unit): number {
   const n = Math.max(4, aliveCount(u));
   const bon = formationBonus(u.formation);
@@ -222,4 +267,4 @@ export function nearestEnemy(u: Unit, units: Unit[]): Unit | null {
   return best;
 }
 
-export { worldSoldierPos };
+export { worldSoldierPos, missileAbsorb, lastStandBonus };
