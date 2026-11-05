@@ -1,0 +1,165 @@
+:root {
+  color-scheme: dark;
+  --bg: #080b0b;
+  --panel: #121212;
+  --gold: #ffc629;
+  --text: #f5f5f5;
+  --muted: #9aa0a6;
+  --rome: #c45c26;
+  --qin: #1a5c38;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  background: #5c7a40;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#hud .panel {
+  pointer-events: auto;
+  background: rgba(18, 18, 18, 0.92);
+  border: 1px solid rgba(255, 198, 41, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+
+#hud .top {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+#hud .title {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  font-size: 15px;
+}
+
+#hud .msg {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 520px;
+}
+
+#hud .btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#hud button {
+  pointer-events: auto;
+  background: #1a1a1a;
+  color: var(--text);
+  border: 1px solid rgba(255, 198, 41, 0.45);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#hud button:hover { background: #242424; border-color: var(--gold); }
+#hud button.primary { background: var(--gold); color: #111; border-color: var(--gold); }
+#hud button.active { outline: 2px solid var(--gold); }
+
+#hud .bottom {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+#hud .cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding-bottom: 2px;
+}
+
+#hud .card {
+  min-width: 118px;
+  max-width: 140px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(18,18,18,0.9);
+  cursor: pointer;
+  pointer-events: auto;
+}
+#hud .card.rome { border-top: 3px solid var(--rome); }
+#hud .card.qin { border-top: 3px solid var(--qin); opacity: 0.85; }
+#hud .card.selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+#hud .card .name { font-size: 12px; font-weight: 700; }
+#hud .card .meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+#hud .card .bar {
+  margin-top: 6px;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+#hud .card .bar > span {
+  display: block;
+  height: 100%;
+  background: #3ddc84;
+}
+
+#hud .help {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 220px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  max-height: 42vh;
+  overflow: auto;
+}
+#hud .help b { color: var(--gold); }
+
+#hud .banner-end {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  padding: 20px 28px;
+  pointer-events: auto;
+}
+#hud .banner-end h2 {
+  color: var(--gold);
+  margin-bottom: 8px;
+  font-size: 28px;
+}
